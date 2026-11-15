@@ -164,7 +164,7 @@ public class Home extends Activity {
         tiles.add(new Tile("hems", "HEMS", "⌂", GREEN, a("app.homey", "io.athom.homey", "io.athom.homeyapp"), a("homey"),
                 this::openSettings));
         tiles.add(new Tile("gmail", "Gmail", "✉", RED, a("com.google.android.gm"), a("gmail"), () -> store("com.google.android.gm")));
-        tiles.add(new Tile("claude", "Claude", "✳", AMBER, a("com.anthropic.claude"), a("claude"), () -> store("com.anthropic.claude")));
+        tiles.add(new Tile("claude", "Claude", "✳", AMBER, a("com.anthropic.claude"), a("claude"), () -> open(new Intent(Intent.ACTION_VIEW, Uri.parse("https://claude.ai")))));
         tiles.add(new Tile("carset", "Auto-instellingen", "⚙", SILVER,
                 a("com.syu.settings", "com.syu.carinfo", "com.fyt.car"), a("car setting", "auto", "car info", "factory"),
                 () -> open(new Intent(Settings.ACTION_SETTINGS))));
