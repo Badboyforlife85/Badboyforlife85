@@ -2,6 +2,6 @@
 
 Eigen startscherm voor de Android-autoradio (Mercedes).
 
-**Installeren op de radio:** open `is.gd/sterlauncher` in de browser en installeer de APK.
+**Installeren op de radio:** open `is.gd/ster5` in de browser en installeer de APK.
 
-v2.0: automatische route (werk/thuis), Homey-knoppen en energie, rijmodus, dag/nacht.
+v3.0: FG-radio met één tik, alle apps installeren met één knop (F-Droid, Fennec, RadioDroid, NewPipe), launcher zelf updaten, plus alles van v2 (route, Homey, rijmodus, dag/nacht).

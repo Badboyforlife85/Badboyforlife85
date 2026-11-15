@@ -130,7 +130,9 @@ public class Home extends Activity {
 
     @Override protected void onResume() { super.onResume(); startGps(); lastHomey = 0; ui.post(tick); }
     @Override protected void onPause() { super.onPause(); ui.removeCallbacks(tick); try { lm.removeUpdates(gps); } catch (Exception ignored) {} }
-    @Override public void onBackPressed() { closeDrawer(); }  // Home-scherm sluit nooit af
+    @Override public void onBackPressed() { closeDrawer(); }
+    @Override protected void onNewIntent(Intent i) { super.onNewIntent(i); Installer.onResult(this, i); }
+    @Override protected void onDestroy() { super.onDestroy(); Radio.stop(); }  // Home-scherm sluit nooit af
 
     // ---------- Tegels ----------
     private void defineTiles() {
@@ -159,6 +161,7 @@ public class Home extends Activity {
         tiles.add(new Tile("carset", "Auto-instellingen", "⚙", SILVER,
                 a("com.syu.settings", "com.syu.carinfo", "com.fyt.car"), a("car setting", "auto", "car info", "factory"),
                 () -> open(new Intent(Settings.ACTION_SETTINGS))));
+        tiles.add(new Tile("pack", "Apps installeren", "⇩", GREEN, a(), a(), this::installPack));
         tiles.add(new Tile("ster", "Ster-instellingen", "✦", BLUE, a(), a(), this::openSettings));
         tiles.add(new Tile("apps", "Alle apps", "⋮⋮", MUTED, a(), a(), this::openDrawer));
     }
@@ -182,6 +185,7 @@ public class Home extends Activity {
     private void launch(Tile t) {
         if (t.id.equals("apps")) { openDrawer(); return; }
         if (t.id.equals("ster")) { openSettings(); return; }
+        if (t.id.equals("pack")) { installPack(); return; }
         Intent i = resolve(t);
         if (i != null) open(i); else t.fallback.run();
     }
@@ -235,6 +239,7 @@ public class Home extends Activity {
         LinearLayout rightCol = new LinearLayout(this); rightCol.setOrientation(LinearLayout.VERTICAL);
         sv.addView(rightCol, new ViewGroup.LayoutParams(-1, -2));
         rightCol.addView(homeyCard());
+        rightCol.addView(radioCard());
         GridLayout grid = new GridLayout(this); grid.setColumnCount(4);
         rightCol.addView(grid, new LinearLayout.LayoutParams(-1, -2));
         tileViews.clear();
@@ -273,12 +278,12 @@ public class Home extends Activity {
         v.setLayoutParams(gl);
         pressable(v);
         v.setOnClickListener(x -> launch(t));
-        v.setOnLongClickListener(x -> { if (!t.id.equals("apps") && !t.id.equals("ster")) pickAppFor(t); return true; });
+        v.setOnLongClickListener(x -> { if (!t.id.equals("apps") && !t.id.equals("ster") && !t.id.equals("pack")) pickAppFor(t); return true; });
         return v;
     }
 
     private Drawable iconFor(Tile t) {
-        if (t.id.equals("apps") || t.id.equals("ster")) return null;
+        if (t.id.equals("apps") || t.id.equals("ster") || t.id.equals("pack")) return null;
         try { Intent i = resolve(t); if (i != null && i.getComponent() != null) return pm.getActivityIcon(i.getComponent()); }
         catch (Exception ignored) {}
         return null;
@@ -612,12 +617,73 @@ public class Home extends Activity {
         new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
             .setTitle("Ster-instellingen").setView(sv)
             .setNegativeButton("Annuleren", null)
+            .setNeutralButton("Launcher updaten", (d, w) -> selfUpdate())
             .setPositiveButton("Bewaren", (d, w) -> {
                 SharedPreferences.Editor ed = prefs.edit();
                 for (int i = 0; i < f.length; i++) ed.putString(f[i][0], inputs[i].getText().toString().trim());
                 ed.putInt("nightMode", Math.max(0, rg.getCheckedRadioButtonId() - 100));
                 ed.apply(); lastHomey = 0; setContentView(buildUi());
             }).show();
+    }
+
+    // ---------- v3: FG-radio ----------
+    private TextView radioState;
+    private View radioCard() {
+        LinearLayout c = new LinearLayout(this); c.setOrientation(LinearLayout.VERTICAL);
+        c.setBackground(card(CARD, 26)); c.setPadding(px(18), px(12), px(18), px(12));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2); lp.setMargins(px(7), px(7), px(7), px(7));
+        c.setLayoutParams(lp);
+        LinearLayout head = new LinearLayout(this);
+        TextView h = text("RADIO", 11, BLUE); h.setLetterSpacing(0.15f); head.addView(h);
+        radioState = text(Radio.playing() ? "  ·  ▶ " + Radio.current() : "", 11, GREEN); head.addView(radioState);
+        c.addView(head);
+        LinearLayout row = new LinearLayout(this); row.setPadding(0, px(8), 0, 0);
+        for (String[] st : Radio.STATIONS) {
+            TextView b = text(st[0], 15, TEXT); b.setGravity(Gravity.CENTER); b.setSingleLine(true);
+            b.setBackground(card(CARD_PRESSED, 18)); b.setPadding(px(8), px(12), px(8), px(12));
+            LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(0, -2, 1f); bl.setMargins(0, 0, px(10), 0);
+            row.addView(b, bl); pressable(b);
+            b.setOnClickListener(v -> { toast("▶ " + st[0] + " laden…");
+                Radio.play(this, st[0], st[1], err -> ui.post(() -> { toast(err); updateRadio(); }));
+                ui.postDelayed(this::updateRadio, 300); });
+        }
+        TextView stop = text("■", 18, RED); stop.setGravity(Gravity.CENTER); stop.setBackground(card(CARD_PRESSED, 18));
+        row.addView(stop, new LinearLayout.LayoutParams(px(58), -1)); pressable(stop);
+        stop.setOnClickListener(v -> { Radio.stop(); updateRadio(); });
+        c.addView(row);
+        return c;
+    }
+    private void updateRadio() { if (radioState != null) radioState.setText(Radio.playing() ? "  ·  ▶ " + Radio.current() : ""); }
+
+    // ---------- v3: apps installeren & updaten ----------
+    private boolean installAllowed() {
+        if (pm.canRequestPackageInstalls()) return true;
+        toast("Sta eenmalig 'Apps installeren' toe voor Ster Launcher en tik dan opnieuw");
+        open(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + getPackageName())));
+        return false;
+    }
+    private void installPack() {
+        if (!installAllowed()) return;
+        List<String[]> todo = new ArrayList<>();
+        for (String[] app : Installer.PACK) {
+            boolean have; try { pm.getPackageInfo(app[1], 0); have = true; } catch (Exception e) { have = false; }
+            if (!have) todo.add(app);
+        }
+        if (todo.isEmpty()) { toast("Alles is al geïnstalleerd ✓"); return; }
+        StringBuilder sb = new StringBuilder();
+        for (String[] t : todo) sb.append("•  ").append(t[0]).append("\n");
+        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+            .setTitle("Deze apps installeren?")
+            .setMessage(sb + "\nJe bevestigt elke app met één tik op 'Installeren'.")
+            .setNegativeButton("Nee", null)
+            .setPositiveButton("Installeren", (d, w) -> Installer.start(this, todo))
+            .show();
+    }
+    private void selfUpdate() {
+        if (!installAllowed()) return;
+        List<String[]> me = new ArrayList<>();
+        me.add(new String[]{"Ster Launcher", getPackageName(), Installer.SELF_URL});
+        Installer.start(this, me);
     }
 
     // ---------- Hulpjes ----------
