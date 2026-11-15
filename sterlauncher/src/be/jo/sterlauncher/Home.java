@@ -198,16 +198,17 @@ public class Home extends Activity {
         root.setBackground(bg);
 
         LinearLayout main = new LinearLayout(this);
-        main.setOrientation(LinearLayout.HORIZONTAL);
+        boolean portrait = getResources().getDisplayMetrics().heightPixels > getResources().getDisplayMetrics().widthPixels;
+        main.setOrientation(portrait ? LinearLayout.VERTICAL : LinearLayout.HORIZONTAL);
         main.setPadding(px(28), px(22), px(28), px(22));
         root.addView(main, new FrameLayout.LayoutParams(-1, -1));
 
         // Linkerkolom: klok, status, muziek
         LinearLayout left = new LinearLayout(this);
         left.setOrientation(LinearLayout.VERTICAL);
-        main.addView(left, new LinearLayout.LayoutParams(0, -1, 0.9f));
+        main.addView(left, portrait ? new LinearLayout.LayoutParams(-1, -2) : new LinearLayout.LayoutParams(0, -1, 0.9f));
 
-        clock = text("", 96, TEXT); clock.setTypeface(Typeface.create("sans-serif-thin", Typeface.NORMAL));
+        clock = text("", portrait ? 72 : 96, TEXT); clock.setTypeface(Typeface.create("sans-serif-thin", Typeface.NORMAL));
         clock.setIncludeFontPadding(false);
         left.addView(clock);
         date = text("", 20, MUTED); left.addView(date);
@@ -232,16 +233,16 @@ public class Home extends Activity {
         View g2 = new View(this); left.addView(g2, new LinearLayout.LayoutParams(1, px(12)));
         left.addView(mediaCard(), new LinearLayout.LayoutParams(-1, -2));
 
-        View gap = new View(this); main.addView(gap, new LinearLayout.LayoutParams(px(28), 1));
+        View gap = new View(this); main.addView(gap, new LinearLayout.LayoutParams(portrait ? 1 : px(28), portrait ? px(14) : 1));
 
         // Rechterkolom: tegels
         ScrollView sv = new ScrollView(this); sv.setVerticalScrollBarEnabled(false);
-        main.addView(sv, new LinearLayout.LayoutParams(0, -1, 2.1f));
+        main.addView(sv, portrait ? new LinearLayout.LayoutParams(-1, 0, 1f) : new LinearLayout.LayoutParams(0, -1, 2.1f));
         LinearLayout rightCol = new LinearLayout(this); rightCol.setOrientation(LinearLayout.VERTICAL);
         sv.addView(rightCol, new ViewGroup.LayoutParams(-1, -2));
         rightCol.addView(homeyCard());
         rightCol.addView(radioCard());
-        GridLayout grid = new GridLayout(this); grid.setColumnCount(4);
+        GridLayout grid = new GridLayout(this); grid.setColumnCount(portrait ? 3 : 4);
         rightCol.addView(grid, new LinearLayout.LayoutParams(-1, -2));
         tileViews.clear();
         for (Tile t : tiles) { View tv = tileView(t); tileViews.put(t.id, tv); grid.addView(tv); }
@@ -690,7 +691,7 @@ public class Home extends Activity {
     private void selfUpdate() {
         if (!installAllowed()) return;
         List<String[]> me = new ArrayList<>();
-        me.add(new String[]{"Ster Launcher", getPackageName(), Installer.SELF_URL});
+        me.add(new String[]{"Ster", getPackageName(), getPackageName().endsWith("mobiel") ? Installer.SELF_URL.replace("SterLauncher.apk", "SterMobiel.apk") : Installer.SELF_URL});
         Installer.start(this, me);
     }
 
