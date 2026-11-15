@@ -1,1 +1,2 @@
-<resources><string name="app_name">Ster Launcher</string></resources>
+<resources><string name="app_name">Ster Launcher</string>
+<string name="def_host"></string><string name="def_user"></string><string name="def_pass"></string></resources>

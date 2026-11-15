@@ -85,7 +85,7 @@ public class TvActivity extends Activity {
     private void loadLogin() {
         status.setText("Inloggen…");
         pool.execute(() -> {
-            String h = prefs.getString("tvHost", ""), u = prefs.getString("tvUser", ""), p = prefs.getString("tvPass", "");
+            String h = prefs.getString("tvHost", getString(R.string.def_host)), u = prefs.getString("tvUser", getString(R.string.def_user)), p = prefs.getString("tvPass", getString(R.string.def_pass));
             // Externe modus: login uit Homey-variabelen (iptv_host / iptv_user / iptv_pass)
             if (prefs.getBoolean("tvFromHomey", false)) {
                 try {
@@ -136,7 +136,8 @@ public class TvActivity extends Activity {
         for (int i = 0; i < fl.length; i++) {
             TextView l = txt(fl[i][1], 13, MUTED); l.setPadding(0, px(10), 0, px(2)); f.addView(l);
             android.widget.AutoCompleteTextView e = new android.widget.AutoCompleteTextView(this);
-            e.setSingleLine(true); e.setTextColor(TEXT); e.setText(prefs.getString(fl[i][0], "")); e.setThreshold(0);
+            e.setSingleLine(true); e.setTextColor(TEXT); String def = fl[i][0].equals("tvHost") ? getString(R.string.def_host) : fl[i][0].equals("tvUser") ? getString(R.string.def_user) : fl[i][0].equals("tvPass") ? getString(R.string.def_pass) : "";
+            e.setText(prefs.getString(fl[i][0], def)); e.setThreshold(0);
             List<String> hist = new ArrayList<>(prefs.getStringSet("hist_" + fl[i][0], new HashSet<>()));
             if (fl[i][0].equals("tvHost") && hist.isEmpty()) hist.add("http://");
             e.setAdapter(new android.widget.ArrayAdapter<>(this, android.R.layout.simple_dropdown_item_1line, hist));
@@ -148,20 +149,23 @@ public class TvActivity extends Activity {
         Runnable fromClip = () -> { String[] r = parseLogin(clipboard()); if (r != null) {
                 in[0].setText(r[0]); in[1].setText(r[1]); in[2].setText(r[2]); toast("✓ Login ingevuld uit gekopieerde link"); } };
         paste.setOnClickListener(v -> { if (parseLogin(clipboard()) == null) toast("Kopieer eerst je M3U- of IPTV-link"); else fromClip.run(); });
-        if (in[0].getText().length() == 0) fromClip.run();   // automatisch bij eerste keer
+        final boolean empty = in[0].getText().length() == 0;
         android.widget.CheckBox hb = new android.widget.CheckBox(this); hb.setTextColor(TEXT);
         hb.setText("Login automatisch uit Homey halen (iptv_host, iptv_user, iptv_pass)");
         hb.setChecked(prefs.getBoolean("tvFromHomey", false)); f.addView(hb);
         ScrollView sv = new ScrollView(this); sv.addView(f);
-        new android.app.AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+        android.app.AlertDialog dlg = new android.app.AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
             .setTitle("TV-login").setView(sv).setNegativeButton("Annuleren", null)
+            .setOnDismissListener(null)
             .setPositiveButton("Opslaan", (d, w) -> {
                 SharedPreferences.Editor ed = prefs.edit();
                 for (int i = 0; i < fl.length; i++) { String val = in[i].getText().toString().trim(); ed.putString(fl[i][0], val);
                     if (!val.isEmpty() && i < 3) { Set<String> h = new HashSet<>(prefs.getStringSet("hist_" + fl[i][0], new HashSet<>()));
                         h.add(val); ed.putStringSet("hist_" + fl[i][0], h); } }
                 ed.putBoolean("tvFromHomey", hb.isChecked()).apply(); loadLogin();
-            }).show();
+            }).create();
+        dlg.setOnShowListener(x -> { if (empty) sv.postDelayed(fromClip, 400); });   // klembord pas lezen als het scherm actief is
+        dlg.show();
     }
 
     private String clipboard() {
