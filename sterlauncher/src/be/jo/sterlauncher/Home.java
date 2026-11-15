@@ -89,6 +89,7 @@ public class Home extends Activity {
     private View nightOverlay;
     private final Map<String, View> tileViews = new HashMap<>();
     private boolean driving = false, night = false;
+    static volatile boolean drivingNow = false;
     private long lastHomey = 0;
     private double lat = 51.14, lon = 3.41;  // standaard: Meetjesland
     private LocationManager lm;
@@ -148,8 +149,8 @@ public class Home extends Activity {
                 () -> toast("Geen CarPlay-app gevonden. Vraag de ZLink-update aan je verkoper.")));
         tiles.add(new Tile("music", "Spotify", "♫", GREEN, a("com.spotify.music"), a("spotify", "music", "muziek"),
                 () -> store("com.spotify.music")));
-        tiles.add(new Tile("tv", "Shamel TV", "▶", RED, a(), a("shamel", "shahid"),
-                () -> storeSearch("Shamel TV")));
+        tiles.add(new Tile("tv", "TV", "▶", RED, a(), a(),
+                () -> open(new Intent(this, TvActivity.class))));
         tiles.add(new Tile("youtube", "YouTube", "►", RED, a("com.google.android.youtube"), a("youtube"),
                 () -> store("com.google.android.youtube")));
         tiles.add(new Tile("browser", "Browser", "◍", BLUE, a("com.android.chrome", "org.mozilla.firefox", "com.brave.browser"),
@@ -511,7 +512,7 @@ public class Home extends Activity {
         else speedText.setVisibility(View.GONE);
         boolean d = driving ? kmh > 20 : kmh > 30;   // hysterese: geen geflikker rond 30 km/u
         if (d == driving) return;
-        driving = d;
+        driving = d; drivingNow = d;
         for (String id : DISTRACTING) { View v = tileViews.get(id); if (v != null) v.setVisibility(d ? View.GONE : View.VISIBLE); }
         if (d && drawer != null) closeDrawer();
         speedText.setTextColor(d ? BLUE : TEXT);
@@ -597,6 +598,9 @@ public class Home extends Activity {
             {"vPrice", "Homey-variabele stroomprijs (€/kWh)", "stroomprijs"},
             {"work", "Adres werk", "Stora Enso Langerbrugge, Gent"},
             {"home", "Adres thuis", "Knesselare"},
+            {"tvHost", "TV – URL + poort (bv. http://line.voorbeeld.nl)", ""},
+            {"tvUser", "TV – gebruikersnaam", ""},
+            {"tvPass", "TV – wachtwoord", ""},
         };
         LinearLayout form = new LinearLayout(this); form.setOrientation(LinearLayout.VERTICAL); form.setPadding(px(20), px(8), px(20), px(8));
         final EditText[] inputs = new EditText[f.length];
@@ -604,9 +608,12 @@ public class Home extends Activity {
             TextView l = text(f[i][1], 13, MUTED); l.setPadding(0, px(10), 0, px(2)); form.addView(l);
             EditText e = new EditText(this); e.setSingleLine(true); e.setTextColor(TEXT); e.setTextSize(16);
             e.setText(prefs.getString(f[i][0], f[i][2]));
-            if (f[i][0].equals("hKey")) e.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+            if (f[i][0].equals("hKey") || f[i][0].equals("tvPass")) e.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
             inputs[i] = e; form.addView(e);
         }
+        final android.widget.CheckBox fromHomey = new android.widget.CheckBox(this);
+        fromHomey.setText("TV-login automatisch uit Homey halen (variabelen iptv_host, iptv_user, iptv_pass)");
+        fromHomey.setTextColor(TEXT); fromHomey.setChecked(prefs.getBoolean("tvFromHomey", false)); form.addView(fromHomey);
         TextView nl = text("Nachtmodus", 13, MUTED); nl.setPadding(0, px(10), 0, px(2)); form.addView(nl);
         final android.widget.RadioGroup rg = new android.widget.RadioGroup(this); rg.setOrientation(LinearLayout.HORIZONTAL);
         String[] opts = {"Automatisch (zon)", "Altijd dag", "Altijd nacht"};
@@ -621,6 +628,7 @@ public class Home extends Activity {
             .setPositiveButton("Bewaren", (d, w) -> {
                 SharedPreferences.Editor ed = prefs.edit();
                 for (int i = 0; i < f.length; i++) ed.putString(f[i][0], inputs[i].getText().toString().trim());
+                ed.putBoolean("tvFromHomey", fromHomey.isChecked());
                 ed.putInt("nightMode", Math.max(0, rg.getCheckedRadioButtonId() - 100));
                 ed.apply(); lastHomey = 0; setContentView(buildUi());
             }).show();
