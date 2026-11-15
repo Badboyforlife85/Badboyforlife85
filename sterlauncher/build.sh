@@ -1,6 +1,6 @@
 #!/bin/sh
 set -e
-BT=/root/sdk/build-tools/35.0.0; AJ=/root/sdk/platforms/android-33/android.jar
+BT=/root/sdk/build-tools/35.0.0; AJ=/root/sdk/platforms/android-35/android.jar
 cd "$(dirname "$0")"; rm -rf build; mkdir -p build/cls build/dex
 $BT/aapt2 compile --dir res -o build/res.zip
 $BT/aapt2 link -I $AJ --manifest AndroidManifest.xml -o build/base.apk build/res.zip --java build/gen

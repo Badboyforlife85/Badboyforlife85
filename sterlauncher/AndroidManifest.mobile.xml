@@ -1,16 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="be.jo.sterlauncher" android:versionCode="4" android:versionName="4.0">
-  <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="33"/>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="be.jo.sterlauncher" android:versionCode="5" android:versionName="4.1">
+  <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="35"/>
   <uses-permission android:name="android.permission.BLUETOOTH"/>
   <uses-permission android:name="android.permission.INTERNET"/>
-  <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
   <uses-permission android:name="android.permission.WAKE_LOCK"/>
   <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
   <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
   <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
   <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>
   <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
-  <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"/>
+  <queries>
+    <intent><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent>
+    <intent><action android:name="android.intent.action.VIEW"/><data android:scheme="https"/></intent>
+    <intent><action android:name="android.intent.action.VIEW"/><data android:scheme="market"/></intent>
+  </queries>
   <application android:usesCleartextTraffic="true" android:label="Ster Mobiel" android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen" android:icon="@android:drawable/star_big_on">
     <activity android:name=".Home" android:exported="true" android:launchMode="singleTask" android:screenOrientation="unspecified" android:stateNotNeeded="true" android:resizeableActivity="true" android:configChanges="orientation|screenSize|keyboardHidden">
       <intent-filter>

@@ -666,6 +666,10 @@ public class Home extends Activity {
 
     // ---------- v3: apps installeren & updaten ----------
     private boolean installAllowed() {
+        if (getPackageName().endsWith("mobiel")) {
+            toast("Op je gsm installeer je apps via de Play Store – deze knop is voor de autoradio");
+            return false;
+        }
         if (pm.canRequestPackageInstalls()) return true;
         toast("Sta eenmalig 'Apps installeren' toe voor Ster Launcher en tik dan opnieuw");
         open(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + getPackageName())));
