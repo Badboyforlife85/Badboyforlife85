@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="be.jo.sterlauncher" android:versionCode="9" android:versionName="4.3">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="be.jo.sterlauncher" android:versionCode="10" android:versionName="5.0">
   <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="35"/>
   <uses-permission android:name="android.permission.BLUETOOTH"/>
   <uses-permission android:name="android.permission.INTERNET"/>
+  <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
   <uses-permission android:name="android.permission.WAKE_LOCK"/>
   <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
   <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
@@ -23,6 +24,11 @@
       </intent-filter>
     </activity>
     <activity android:name=".TvActivity" android:exported="false" android:screenOrientation="sensorLandscape" android:configChanges="orientation|screenSize|keyboardHidden" android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen"/>
+    <service android:name=".Float" android:exported="false"/>
+    <activity android:name=".HemsActivity" android:exported="false" android:configChanges="orientation|screenSize|keyboardHidden" android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen"/>
+    <activity android:name=".ShareActivity" android:exported="true" android:label="🚗 Naar de auto" android:theme="@android:style/Theme.Translucent.NoTitleBar" android:excludeFromRecents="true">
+      <intent-filter><action android:name="android.intent.action.SEND"/><category android:name="android.intent.category.DEFAULT"/><data android:mimeType="text/plain"/></intent-filter>
+    </activity>
     <service android:name=".MediaListener" android:exported="true" android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
       <intent-filter><action android:name="android.service.notification.NotificationListenerService"/></intent-filter>
     </service>

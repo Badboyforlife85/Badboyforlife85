@@ -70,6 +70,21 @@ final class Smart {
         return out;
     }
 
+    /** Zet (of maakt) een tekstvariabele in Homey. */
+    static void setVariable(String baseUrl, String key, String name, String value) throws Exception {
+        JSONObject all = new JSONObject(http("GET", base(baseUrl) + "/api/manager/logic/variable", key, null));
+        String esc = JSONObject.quote(value);
+        for (Iterator<String> it = all.keys(); it.hasNext(); ) {
+            String id = it.next();
+            if (all.getJSONObject(id).optString("name").equalsIgnoreCase(name)) {
+                http("PUT", base(baseUrl) + "/api/manager/logic/variable/" + id, key, "{\"variable\":{\"value\":" + esc + "}}");
+                return;
+            }
+        }
+        http("POST", base(baseUrl) + "/api/manager/logic/variable", key,
+            "{\"variable\":{\"name\":" + JSONObject.quote(name) + ",\"type\":\"string\",\"value\":" + esc + "}}");
+    }
+
     /** Leest Homey-logicavariabelen op naam (hoofdletterongevoelig). Leeg = niet gevonden. */
     static String[] variables(String baseUrl, String key, String... names) throws Exception {
         JSONObject all = new JSONObject(http("GET", base(baseUrl) + "/api/manager/logic/variable", key, null));

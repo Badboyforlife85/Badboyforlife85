@@ -90,7 +90,8 @@ public class Home extends Activity {
     private final Map<String, View> tileViews = new HashMap<>();
     private boolean driving = false, night = false;
     static volatile boolean drivingNow = false;
-    private long lastHomey = 0;
+    private long lastHomey = 0, lastDest = 0;
+    private LinearLayout destCard; private TextView destText; private String pendingDest = "";
     private double lat = 51.14, lon = 3.41;  // standaard: Meetjesland
     private LocationManager lm;
     private static final String[] DISTRACTING = {"tv", "youtube", "browser", "store"};
@@ -193,9 +194,7 @@ public class Home extends Activity {
         if (t.id.equals("apps")) { openDrawer(); return; }
         if (t.id.equals("ster")) { openSettings(); return; }
         if (t.id.equals("pack")) { installPack(); return; }
-        if (t.id.equals("hems") && !prefs.getString("hemsUrl", "").isEmpty()
-                && prefs.getString("tile_hems", null) == null) {
-            open(new Intent(Intent.ACTION_VIEW, Uri.parse(prefs.getString("hemsUrl", "")))); return; }
+        if (t.id.equals("hems") && prefs.getString("tile_hems", null) == null) { open(new Intent(this, HemsActivity.class)); return; }
         Intent i = resolve(t);
         if (i != null) open(i); else t.fallback.run();
     }
@@ -251,6 +250,7 @@ public class Home extends Activity {
         main.addView(sv, portrait ? new LinearLayout.LayoutParams(-1, 0, 1f) : new LinearLayout.LayoutParams(0, -1, 2.1f));
         LinearLayout rightCol = new LinearLayout(this); rightCol.setOrientation(LinearLayout.VERTICAL);
         sv.addView(rightCol, new ViewGroup.LayoutParams(-1, -2));
+        rightCol.addView(destCard());
         rightCol.addView(homeyCard());
         rightCol.addView(radioCard());
         GridLayout grid = new GridLayout(this); grid.setColumnCount(portrait ? 3 : 4);
@@ -419,6 +419,7 @@ public class Home extends Activity {
         date.setText(new SimpleDateFormat("EEEE d MMMM", new Locale("nl", "BE")).format(now));
         updateStatus(); updateMedia(); updateRoute(); updateNight();
         if (System.currentTimeMillis() - lastHomey > 60000) { lastHomey = System.currentTimeMillis(); refreshHomey(); }
+        if (System.currentTimeMillis() - lastDest > 15000) { lastDest = System.currentTimeMillis(); pollDest(); }
         ui.postDelayed(this, 1000);
     }};
 
@@ -431,7 +432,18 @@ public class Home extends Activity {
                         || a.getProfileConnectionState(BluetoothProfile.A2DP) == BluetoothProfile.STATE_CONNECTED;
         } catch (Exception ignored) {}
         // Veel autoradio's hebben een aparte Bluetooth-module die Android niet ziet: dan neutraal tonen
-        setChip(btChip, bt ? "● GSM verbonden" : "✆ Bluetooth", bt ? GREEN : SILVER);
+        String via = bt ? "Bluetooth" : null;
+        if (!bt) {   // aparte BT-module: herken de gsm via de BT-muziekapp of de hotspot van de gsm
+            try { MediaController m = mediaAllowed() ? controller() : null;
+                if (m != null && m.getPackageName().matches(".*(syu|fyt|microntek|bt|bluetooth).*")) via = "Bluetooth"; } catch (Exception ignored) {}
+            try { android.net.wifi.WifiManager wm = (android.net.wifi.WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+                String ssid = wm.getConnectionInfo().getSSID().replace("\"", "");
+                String hs = prefs.getString("hotspot", "");
+                if (!hs.isEmpty() ? ssid.equalsIgnoreCase(hs) : ssid.matches("(?i).*(iphone|galaxy|android|redmi|pixel|oneplus|xiaomi|huawei|oppo|jo).*"))
+                    via = via == null ? "hotspot" : via + " + hotspot";
+            } catch (Exception ignored) {}
+        }
+        setChip(btChip, via != null ? "● GSM (" + via + ")" : "✆ Bluetooth", via != null ? GREEN : SILVER);
 
         boolean wifi = false, net = false;
         try {
@@ -481,6 +493,52 @@ public class Home extends Activity {
         ui.postDelayed(this::updateMedia, 300);
     }
 
+    // ---------- v5: bestemming van gsm ----------
+    private View destCard() {
+        destCard = new LinearLayout(this); destCard.setOrientation(LinearLayout.HORIZONTAL); destCard.setGravity(Gravity.CENTER_VERTICAL);
+        GradientDrawable g = card(0xFF10263A, 26); g.setStroke(px(2), BLUE); destCard.setBackground(g);
+        destCard.setPadding(px(18), px(12), px(12), px(12));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2); lp.setMargins(px(7), px(7), px(7), px(7)); destCard.setLayoutParams(lp);
+        LinearLayout tx = new LinearLayout(this); tx.setOrientation(LinearLayout.VERTICAL);
+        TextView h = text("📱 BESTEMMING VAN JE GSM", 11, BLUE); h.setLetterSpacing(0.12f); tx.addView(h);
+        destText = text("", 18, TEXT); destText.setMaxLines(2); tx.addView(destText);
+        destCard.addView(tx, new LinearLayout.LayoutParams(0, -2, 1f));
+        TextView go = text("➤ Rijden", 17, Color.WHITE); go.setGravity(Gravity.CENTER); go.setBackground(card(BLUE, 20));
+        go.setPadding(px(18), px(12), px(18), px(12)); destCard.addView(go); pressable(go);
+        TextView x = text("✕", 20, MUTED); x.setGravity(Gravity.CENTER); destCard.addView(x, new LinearLayout.LayoutParams(px(52), px(52)));
+        go.setOnClickListener(v -> { String d = pendingDest; clearDest(); navigateAny(d); });
+        x.setOnClickListener(v -> clearDest());
+        destCard.setVisibility(pendingDest.isEmpty() ? View.GONE : View.VISIBLE);
+        if (!pendingDest.isEmpty()) destText.setText(pendingDest);
+        return destCard;
+    }
+    private void pollDest() {
+        if (!homeyReady()) return;
+        String u = prefs.getString("hUrl", ""), k = prefs.getString("hKey", "");
+        new Thread(() -> { try {
+            String d = Smart.variables(u, k, "ster_bestemming")[0].trim();
+            ui.post(() -> { if (d.equals(pendingDest) || destCard == null) return;
+                pendingDest = d; destText.setText(d); destCard.setVisibility(d.isEmpty() ? View.GONE : View.VISIBLE);
+                if (!d.isEmpty()) toast("📱 Nieuwe bestemming van je gsm"); });
+        } catch (Exception ignored) {} }).start();
+    }
+    private void clearDest() {
+        pendingDest = ""; if (destCard != null) destCard.setVisibility(View.GONE);
+        String u = prefs.getString("hUrl", ""), k = prefs.getString("hKey", "");
+        new Thread(() -> { try { Smart.setVariable(u, k, "ster_bestemming", ""); } catch (Exception ignored) {} }).start();
+    }
+    /** Een gedeelde link (Maps/Waze) openen we rechtstreeks, een adres gaat naar de navigatie-app van je keuze. */
+    private void navigateAny(String d) {
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("https?://\\S+").matcher(d);
+        if (m.find()) {
+            String link = m.group();
+            boolean waze = pm.getLaunchIntentForPackage("com.waze") != null && prefs.getString("navApp", "waze").equals("waze");
+            if (waze && !link.contains("waze.com")) { navigate(d.replace(link, "").trim().isEmpty() ? link : d.replace(link, "").trim()); }
+            else open(new Intent(Intent.ACTION_VIEW, Uri.parse(link)));
+        } else navigate(d);
+        Float.startIfAllowed(this);
+    }
+
     // ---------- v2: automatische route ----------
     private boolean toWork() {
         Calendar c = Calendar.getInstance();
@@ -513,9 +571,11 @@ public class Home extends Activity {
     }
     private void navigate(String addr) {
         Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse("https://waze.com/ul?q=" + Uri.encode(addr) + "&navigate=yes"));
-        if (pm.getLaunchIntentForPackage("com.waze") != null) i.setPackage("com.waze");
+        boolean waze = pm.getLaunchIntentForPackage("com.waze") != null && prefs.getString("navApp", "waze").equals("waze");
+        if (waze) i.setPackage("com.waze");
         else i = new Intent(Intent.ACTION_VIEW, Uri.parse("google.navigation:q=" + Uri.encode(addr)));
         open(i);
+        Float.startIfAllowed(this);
     }
 
     // ---------- v2: rijmodus ----------
@@ -636,6 +696,8 @@ public class Home extends Activity {
         final String[][] f = {
             {"hUrl", "Homey-adres (thuis http://192.168.x.x, onderweg https://<id>.connect.athom.com)", ""},
             {"hKey", "Homey API-sleutel (Homey-app → Instellingen → API-sleutels)", ""},
+            {"hotspot", "Naam hotspot van je gsm (voor gsm-herkenning)", ""},
+            {"navApp", "Navigatie-app: waze of maps", "waze"},
             {"hemsUrl", "HEMS-dashboard (webadres, optioneel – leeg = Homey-app)", ""},
             {"vSolar", "Homey-variabele zonnevermogen (W)", "zon_vermogen"},
             {"vBatt", "Homey-variabele batterij (%)", "batterij_soc"},
@@ -655,6 +717,9 @@ public class Home extends Activity {
             if (f[i][0].equals("hKey") || f[i][0].equals("tvPass")) e.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
             inputs[i] = e; form.addView(e);
         }
+        final android.widget.CheckBox floatOn = new android.widget.CheckBox(this);
+        floatOn.setText("Zwevend Ster-paneel tonen tijdens navigatie"); floatOn.setTextColor(TEXT);
+        floatOn.setChecked(prefs.getBoolean("floatOn", true)); form.addView(floatOn);
         final android.widget.CheckBox fromHomey = new android.widget.CheckBox(this);
         fromHomey.setText("TV-login automatisch uit Homey halen (variabelen iptv_host, iptv_user, iptv_pass)");
         fromHomey.setTextColor(TEXT); fromHomey.setChecked(prefs.getBoolean("tvFromHomey", false)); form.addView(fromHomey);
@@ -673,6 +738,11 @@ public class Home extends Activity {
                 SharedPreferences.Editor ed = prefs.edit();
                 for (int i = 0; i < f.length; i++) ed.putString(f[i][0], inputs[i].getText().toString().trim());
                 ed.putBoolean("tvFromHomey", fromHomey.isChecked());
+                ed.putBoolean("floatOn", floatOn.isChecked());
+                if (floatOn.isChecked() && !Settings.canDrawOverlays(this)) {
+                    toast("Sta 'Weergeven over andere apps' toe voor Ster");
+                    open(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getPackageName())));
+                }
                 ed.putInt("nightMode", Math.max(0, rg.getCheckedRadioButtonId() - 100));
                 ed.apply(); lastHomey = 0; setContentView(buildUi());
             }).show();
