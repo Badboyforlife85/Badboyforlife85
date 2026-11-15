@@ -131,13 +131,24 @@ public class TvActivity extends Activity {
         String[][] fl = {{"tvHost", "URL + poort (bv. http://line.voorbeeld.nl)"}, {"tvUser", "Gebruikersnaam"}, {"tvPass", "Wachtwoord"},
                 {"hUrl", "Homey-adres (optioneel, voor login via Homey)"}, {"hKey", "Homey API-sleutel (optioneel)"}};
         EditText[] in = new EditText[fl.length];
+        TextView paste = txt("📋  Login uit gekopieerde link halen", 15, BLUE); paste.setPadding(0, px(6), 0, px(4));
+        f.addView(paste);
         for (int i = 0; i < fl.length; i++) {
             TextView l = txt(fl[i][1], 13, MUTED); l.setPadding(0, px(10), 0, px(2)); f.addView(l);
-            EditText e = new EditText(this); e.setSingleLine(true); e.setTextColor(TEXT); e.setText(prefs.getString(fl[i][0], ""));
+            android.widget.AutoCompleteTextView e = new android.widget.AutoCompleteTextView(this);
+            e.setSingleLine(true); e.setTextColor(TEXT); e.setText(prefs.getString(fl[i][0], "")); e.setThreshold(0);
+            List<String> hist = new ArrayList<>(prefs.getStringSet("hist_" + fl[i][0], new HashSet<>()));
+            if (fl[i][0].equals("tvHost") && hist.isEmpty()) hist.add("http://");
+            e.setAdapter(new android.widget.ArrayAdapter<>(this, android.R.layout.simple_dropdown_item_1line, hist));
+            e.setOnFocusChangeListener((v, has) -> { if (has && !hist.isEmpty()) e.showDropDown(); });
             if (fl[i][0].equals("tvPass") || fl[i][0].equals("hKey"))
                 e.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
             in[i] = e; f.addView(e);
         }
+        Runnable fromClip = () -> { String[] r = parseLogin(clipboard()); if (r != null) {
+                in[0].setText(r[0]); in[1].setText(r[1]); in[2].setText(r[2]); toast("✓ Login ingevuld uit gekopieerde link"); } };
+        paste.setOnClickListener(v -> { if (parseLogin(clipboard()) == null) toast("Kopieer eerst je M3U- of IPTV-link"); else fromClip.run(); });
+        if (in[0].getText().length() == 0) fromClip.run();   // automatisch bij eerste keer
         android.widget.CheckBox hb = new android.widget.CheckBox(this); hb.setTextColor(TEXT);
         hb.setText("Login automatisch uit Homey halen (iptv_host, iptv_user, iptv_pass)");
         hb.setChecked(prefs.getBoolean("tvFromHomey", false)); f.addView(hb);
@@ -146,9 +157,26 @@ public class TvActivity extends Activity {
             .setTitle("TV-login").setView(sv).setNegativeButton("Annuleren", null)
             .setPositiveButton("Opslaan", (d, w) -> {
                 SharedPreferences.Editor ed = prefs.edit();
-                for (int i = 0; i < fl.length; i++) ed.putString(fl[i][0], in[i].getText().toString().trim());
+                for (int i = 0; i < fl.length; i++) { String val = in[i].getText().toString().trim(); ed.putString(fl[i][0], val);
+                    if (!val.isEmpty() && i < 3) { Set<String> h = new HashSet<>(prefs.getStringSet("hist_" + fl[i][0], new HashSet<>()));
+                        h.add(val); ed.putStringSet("hist_" + fl[i][0], h); } }
                 ed.putBoolean("tvFromHomey", hb.isChecked()).apply(); loadLogin();
             }).show();
+    }
+
+    private String clipboard() {
+        try { android.content.ClipboardManager cm = (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+            if (cm.hasPrimaryClip()) return String.valueOf(cm.getPrimaryClip().getItemAt(0).coerceToText(this)); } catch (Exception ignored) {}
+        return "";
+    }
+    /** Herkent M3U-links (…/get.php?username=X&password=Y) en stream-links (…/live/X/Y/123.ts). */
+    static String[] parseLogin(String s) {
+        if (s == null) return null;
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(https?://[^/\\s]+)\\S*?[?&]username=([^&\\s]+)\\S*?[?&]password=([^&\\s]+)").matcher(s);
+        if (m.find()) return new String[]{m.group(1), Uri.decode(m.group(2)), Uri.decode(m.group(3))};
+        m = java.util.regex.Pattern.compile("(https?://[^/\\s]+)/(?:live|movie|series)/([^/\\s]+)/([^/\\s]+)/").matcher(s);
+        if (m.find()) return new String[]{m.group(1), Uri.decode(m.group(2)), Uri.decode(m.group(3))};
+        return null;
     }
 
     // ---------- UI ----------
