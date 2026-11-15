@@ -7,3 +7,5 @@ Eigen startscherm voor de Android-autoradio (Mercedes).
 v4.0: eigen TV-scherm (Xtream Codes-login, favorieten, zoeken; login ook via Homey-variabelen). v3.0: FG-radio met één tik, alle apps installeren met één knop (F-Droid, Fennec, RadioDroid, NewPipe), launcher zelf updaten, plus alles van v2 (route, Homey, rijmodus, dag/nacht).
 
 **Gsm-versie (Ster Mobiel):** is.gd/stermob
+
+**Losse TV-app (Ster TV):** is.gd/stertv

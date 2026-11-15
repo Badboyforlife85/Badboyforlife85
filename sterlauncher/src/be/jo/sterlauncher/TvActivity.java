@@ -97,7 +97,7 @@ public class TvActivity extends Activity {
                 } catch (Exception e) { ui.post(() -> toast("Homey niet bereikbaar – laatst bekende login gebruikt")); }
             }
             host = h.replaceAll("/+$", ""); user = u; pass = p;
-            if (host.isEmpty() || user.isEmpty()) { ui.post(() -> status.setText("Vul je TV-login in via ✦ Ster-instellingen")); return; }
+            if (host.isEmpty() || user.isEmpty()) { ui.post(() -> { status.setText("Tik op ⚙ om je login in te vullen"); loginDialog(); }); return; }
             if (!host.startsWith("http")) host = "http://" + host;
             loadChannels();
         });
@@ -125,6 +125,32 @@ public class TvActivity extends Activity {
         }
     }
 
+    // ---------- Login-scherm (⚙) ----------
+    private void loginDialog() {
+        LinearLayout f = new LinearLayout(this); f.setOrientation(LinearLayout.VERTICAL); f.setPadding(px(20), px(8), px(20), px(8));
+        String[][] fl = {{"tvHost", "URL + poort (bv. http://line.voorbeeld.nl)"}, {"tvUser", "Gebruikersnaam"}, {"tvPass", "Wachtwoord"},
+                {"hUrl", "Homey-adres (optioneel, voor login via Homey)"}, {"hKey", "Homey API-sleutel (optioneel)"}};
+        EditText[] in = new EditText[fl.length];
+        for (int i = 0; i < fl.length; i++) {
+            TextView l = txt(fl[i][1], 13, MUTED); l.setPadding(0, px(10), 0, px(2)); f.addView(l);
+            EditText e = new EditText(this); e.setSingleLine(true); e.setTextColor(TEXT); e.setText(prefs.getString(fl[i][0], ""));
+            if (fl[i][0].equals("tvPass") || fl[i][0].equals("hKey"))
+                e.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+            in[i] = e; f.addView(e);
+        }
+        android.widget.CheckBox hb = new android.widget.CheckBox(this); hb.setTextColor(TEXT);
+        hb.setText("Login automatisch uit Homey halen (iptv_host, iptv_user, iptv_pass)");
+        hb.setChecked(prefs.getBoolean("tvFromHomey", false)); f.addView(hb);
+        ScrollView sv = new ScrollView(this); sv.addView(f);
+        new android.app.AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+            .setTitle("TV-login").setView(sv).setNegativeButton("Annuleren", null)
+            .setPositiveButton("Opslaan", (d, w) -> {
+                SharedPreferences.Editor ed = prefs.edit();
+                for (int i = 0; i < fl.length; i++) ed.putString(fl[i][0], in[i].getText().toString().trim());
+                ed.putBoolean("tvFromHomey", hb.isChecked()).apply(); loadLogin();
+            }).show();
+    }
+
     // ---------- UI ----------
     private View build() {
         root = new FrameLayout(this); root.setBackgroundColor(BG);
@@ -133,8 +159,8 @@ public class TvActivity extends Activity {
 
         LinearLayout left = new LinearLayout(this); left.setOrientation(LinearLayout.VERTICAL);
         main.addView(left, new LinearLayout.LayoutParams(px(250), -1));
-        TextView back = txt("‹  Terug", 18, BLUE); back.setPadding(px(6), px(6), 0, px(12));
-        back.setOnClickListener(v -> finish()); left.addView(back);
+        TextView back = txt(getPackageName().endsWith("stertv") ? "Ster TV" : "‹  Terug", 18, BLUE); back.setPadding(px(6), px(6), 0, px(12));
+        back.setOnClickListener(v -> { if (!getPackageName().endsWith("stertv")) finish(); }); left.addView(back);
         ScrollView cs = new ScrollView(this); catList = new LinearLayout(this); catList.setOrientation(LinearLayout.VERTICAL);
         cs.addView(catList); left.addView(cs, new LinearLayout.LayoutParams(-1, 0, 1f));
 
@@ -151,6 +177,8 @@ public class TvActivity extends Activity {
         top.addView(search, new LinearLayout.LayoutParams(0, -2, 1f));
         TextView reload = txt("⟳", 24, TEXT); reload.setGravity(Gravity.CENTER);
         reload.setOnClickListener(v -> loadLogin()); top.addView(reload, new LinearLayout.LayoutParams(px(56), px(48)));
+        TextView gear = txt("⚙", 24, TEXT); gear.setGravity(Gravity.CENTER);
+        gear.setOnClickListener(v -> loginDialog()); top.addView(gear, new LinearLayout.LayoutParams(px(56), px(48)));
         right.addView(top);
         status = txt("", 13, MUTED); status.setPadding(px(4), px(8), 0, px(8)); right.addView(status);
         ScrollView gs = new ScrollView(this); grid = new GridLayout(this); grid.setColumnCount(4);
