@@ -115,7 +115,9 @@ public class Home extends Activity {
         setContentView(buildUi());
         lm = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
         if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED)
-            requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 1);
+            requestPermissions(android.os.Build.VERSION.SDK_INT >= 31
+                ? new String[]{Manifest.permission.ACCESS_FINE_LOCATION, "android.permission.BLUETOOTH_CONNECT"}
+                : new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 1);
     }
 
     @Override public void onRequestPermissionsResult(int rc, String[] p, int[] r) { startGps(); }
@@ -159,6 +161,10 @@ public class Home extends Activity {
                 () -> toast("Play Store is niet geïnstalleerd op deze radio.")));
         tiles.add(new Tile("radio", "Radio", "≋", AMBER, a("com.syu.radio", "com.microntek.radio"), a("radio", "fm"),
                 () -> toast("Geen radio-app gevonden.")));
+        tiles.add(new Tile("hems", "HEMS", "⌂", GREEN, a("app.homey", "io.athom.homey", "io.athom.homeyapp"), a("homey"),
+                this::openSettings));
+        tiles.add(new Tile("gmail", "Gmail", "✉", RED, a("com.google.android.gm"), a("gmail"), () -> store("com.google.android.gm")));
+        tiles.add(new Tile("claude", "Claude", "✳", AMBER, a("com.anthropic.claude"), a("claude"), () -> store("com.anthropic.claude")));
         tiles.add(new Tile("carset", "Auto-instellingen", "⚙", SILVER,
                 a("com.syu.settings", "com.syu.carinfo", "com.fyt.car"), a("car setting", "auto", "car info", "factory"),
                 () -> open(new Intent(Settings.ACTION_SETTINGS))));
@@ -187,6 +193,9 @@ public class Home extends Activity {
         if (t.id.equals("apps")) { openDrawer(); return; }
         if (t.id.equals("ster")) { openSettings(); return; }
         if (t.id.equals("pack")) { installPack(); return; }
+        if (t.id.equals("hems") && !prefs.getString("hemsUrl", "").isEmpty()
+                && prefs.getString("tile_hems", null) == null) {
+            open(new Intent(Intent.ACTION_VIEW, Uri.parse(prefs.getString("hemsUrl", "")))); return; }
         Intent i = resolve(t);
         if (i != null) open(i); else t.fallback.run();
     }
@@ -206,15 +215,17 @@ public class Home extends Activity {
         // Linkerkolom: klok, status, muziek
         LinearLayout left = new LinearLayout(this);
         left.setOrientation(LinearLayout.VERTICAL);
-        main.addView(left, portrait ? new LinearLayout.LayoutParams(-1, -2) : new LinearLayout.LayoutParams(0, -1, 0.9f));
+        ScrollView leftScroll = new ScrollView(this); leftScroll.setFillViewport(true); leftScroll.setVerticalScrollBarEnabled(false);
+        leftScroll.addView(left, new ViewGroup.LayoutParams(-1, -2));
+        main.addView(leftScroll, portrait ? new LinearLayout.LayoutParams(-1, -2) : new LinearLayout.LayoutParams(0, -1, 0.9f));
 
-        clock = text("", portrait ? 72 : 96, TEXT); clock.setTypeface(Typeface.create("sans-serif-thin", Typeface.NORMAL));
+        clock = text("", portrait ? 72 : 68, TEXT); clock.setTypeface(Typeface.create("sans-serif-thin", Typeface.NORMAL));
         clock.setIncludeFontPadding(false);
         left.addView(clock);
         date = text("", 20, MUTED); left.addView(date);
 
         View line = new View(this); line.setBackgroundColor(BLUE);
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(px(56), px(3)); lp.setMargins(0, px(14), 0, px(14));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(px(56), px(3)); lp.setMargins(0, px(10), 0, px(10));
         left.addView(line, lp);
 
         LinearLayout chips = new LinearLayout(this);
@@ -419,7 +430,8 @@ public class Home extends Activity {
                 bt = a.getProfileConnectionState(BluetoothProfile.HEADSET) == BluetoothProfile.STATE_CONNECTED
                         || a.getProfileConnectionState(BluetoothProfile.A2DP) == BluetoothProfile.STATE_CONNECTED;
         } catch (Exception ignored) {}
-        setChip(btChip, bt ? "● GSM verbonden" : "○ Geen GSM", bt ? GREEN : MUTED);
+        // Veel autoradio's hebben een aparte Bluetooth-module die Android niet ziet: dan neutraal tonen
+        setChip(btChip, bt ? "● GSM verbonden" : "✆ Bluetooth", bt ? GREEN : SILVER);
 
         boolean wifi = false, net = false;
         try {
@@ -544,21 +556,54 @@ public class Home extends Activity {
         homeyLine = text(homeyReady() ? "Gegevens laden…" : "Tik hier om je Homey te koppelen", 17, TEXT);
         homeyLine.setPadding(0, px(4), 0, px(8)); c.addView(homeyLine);
         homeyButtons = new LinearLayout(this);
-        String[] defs = {"", "Garagepoort", "Ik kom thuis", "Alarm"};
+        String[] defs = {"", "", "", ""};
         for (int i = 1; i <= 3; i++) {
             final String label = prefs.getString("b" + i + "l", defs[i]);
             final String flow = prefs.getString("b" + i + "f", label);
-            if (label.isEmpty()) continue;
+            final int slot = i;
+            if (label.isEmpty()) {
+                TextView add = text("+ Flow", 15, MUTED); add.setGravity(Gravity.CENTER);
+                add.setBackground(card(CARD_PRESSED, 18)); add.setPadding(px(10), px(12), px(10), px(12));
+                LinearLayout.LayoutParams al = new LinearLayout.LayoutParams(0, -2, 1f); al.setMargins(0, 0, px(10), 0);
+                homeyButtons.addView(add, al); pressable(add);
+                add.setOnClickListener(v -> pickFlow(slot));
+                continue;
+            }
             TextView b = text(label, 15, TEXT); b.setGravity(Gravity.CENTER); b.setSingleLine(true);
             b.setBackground(card(CARD_PRESSED, 18)); b.setPadding(px(10), px(12), px(10), px(12));
             LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(0, -2, 1f); bl.setMargins(0, 0, px(10), 0);
             homeyButtons.addView(b, bl); pressable(b);
             b.setOnClickListener(v -> runFlow(flow));
+            b.setOnLongClickListener(v -> { pickFlow(slot); return true; });
         }
         c.addView(homeyButtons);
         c.setOnClickListener(v -> { if (!homeyReady()) openSettings(); else lastHomey = 0; });
         return c;
     }
+    /** Haalt je eigen Flows uit Homey en laat je er één kiezen voor deze knop. */
+    private void pickFlow(int slot) {
+        if (!homeyReady()) { toast("Koppel eerst je Homey in ✦ Ster-instellingen"); openSettings(); return; }
+        String u = prefs.getString("hUrl", ""), k = prefs.getString("hKey", "");
+        toast("Flows ophalen…");
+        new Thread(() -> {
+            try {
+                List<String> names = Smart.flowNames(u, k);
+                ui.post(() -> {
+                    String[] items = new String[names.size() + 1];
+                    items[0] = "✕ Knop leegmaken";
+                    for (int i = 0; i < names.size(); i++) items[i + 1] = names.get(i);
+                    new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                        .setTitle("Kies een Flow voor knop " + slot)
+                        .setItems(items, (d, w) -> {
+                            if (w == 0) prefs.edit().putString("b" + slot + "l", "").putString("b" + slot + "f", "").apply();
+                            else prefs.edit().putString("b" + slot + "l", items[w]).putString("b" + slot + "f", items[w]).apply();
+                            setContentView(buildUi());
+                        }).show();
+                });
+            } catch (Exception e) { ui.post(() -> toast("Homey niet bereikbaar: " + e.getMessage())); }
+        }).start();
+    }
+
     private void runFlow(String flow) {
         if (!homeyReady()) { openSettings(); return; }
         String u = prefs.getString("hUrl", ""), k = prefs.getString("hKey", "");
@@ -591,9 +636,7 @@ public class Home extends Activity {
         final String[][] f = {
             {"hUrl", "Homey-adres (thuis http://192.168.x.x, onderweg https://<id>.connect.athom.com)", ""},
             {"hKey", "Homey API-sleutel (Homey-app → Instellingen → API-sleutels)", ""},
-            {"b1l", "Knop 1 – naam", "Garagepoort"}, {"b1f", "Knop 1 – naam van de Flow", "Garagepoort"},
-            {"b2l", "Knop 2 – naam", "Ik kom thuis"}, {"b2f", "Knop 2 – naam van de Flow", "Ik kom thuis"},
-            {"b3l", "Knop 3 – naam", "Alarm"}, {"b3f", "Knop 3 – naam van de Flow", "Alarm"},
+            {"hemsUrl", "HEMS-dashboard (webadres, optioneel – leeg = Homey-app)", ""},
             {"vSolar", "Homey-variabele zonnevermogen (W)", "zon_vermogen"},
             {"vBatt", "Homey-variabele batterij (%)", "batterij_soc"},
             {"vPrice", "Homey-variabele stroomprijs (€/kWh)", "stroomprijs"},

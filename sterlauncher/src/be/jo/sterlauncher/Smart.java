@@ -56,6 +56,20 @@ final class Smart {
         return "Flow “" + flowName + "” niet gevonden in Homey";
     }
 
+    /** Alle Flow-namen (gewone + advanced), alfabetisch. */
+    static java.util.List<String> flowNames(String baseUrl, String key) throws Exception {
+        java.util.List<String> out = new java.util.ArrayList<>();
+        for (String kind : new String[]{"flow", "advancedflow"}) {
+            JSONObject all = new JSONObject(http("GET", base(baseUrl) + "/api/manager/flow/" + kind, key, null));
+            for (Iterator<String> it = all.keys(); it.hasNext(); ) {
+                String n = all.getJSONObject(it.next()).optString("name").trim();
+                if (!n.isEmpty() && !out.contains(n)) out.add(n);
+            }
+        }
+        java.util.Collections.sort(out, String.CASE_INSENSITIVE_ORDER);
+        return out;
+    }
+
     /** Leest Homey-logicavariabelen op naam (hoofdletterongevoelig). Leeg = niet gevonden. */
     static String[] variables(String baseUrl, String key, String... names) throws Exception {
         JSONObject all = new JSONObject(http("GET", base(baseUrl) + "/api/manager/logic/variable", key, null));
